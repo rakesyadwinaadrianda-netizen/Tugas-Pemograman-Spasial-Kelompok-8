@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGIS Aksesibilitas Halte Bus Tayogama UGM</title>
+
+  <!-- Leaflet.js CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --bg2:       #161922;
+      --bg3:       #1e2330;
+      --border:    rgba(255,255,255,0.08);
+      --border2:   rgba(255,255,255,0.14);
+      --text:      #e8eaf0;
+      --text2:     #8b90a0;
+      --text3:     #555d70;
+      --accent:    #1fcf8a;
+      --accent2:   #0fa86e;
+      --warn:      #f5a623;
+      --danger:    #e84545;
+      --font:      'IBM Plex Sans', system-ui, sans-serif;
+      --mono:      'IBM Plex Mono', monospace;
+    }
+
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: var(--font); color: var(--text); font-size: 13px; }
+
+    /* ── Layout ── */
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── Topbar ── */
+    #topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 18px; height: 48px; flex-shrink: 0;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+    }
+    #topbar .logo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--text);
+    }
+    #topbar .logo .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+    .badge {
+      font-size: 10px; font-family: var(--mono); padding: 2px 8px;
+      border-radius: 4px; border: 1px solid var(--border2); color: var(--text2);
+      background: var(--bg3); letter-spacing: 0.03em;
+    }
+    .badge.green { border-color: var(--accent2); color: var(--accent); background: rgba(31,207,138,0.08); }
+    #topbar .spacer { flex: 1; }
+    #coord-display {
+      font-family: var(--mono); font-size: 10px; color: var(--text3);
+      padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
+      background: var(--bg); min-width: 240px; text-align: center;
+      transition: color 0.2s;
+    }
+
+    /* ── Main content ── */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 260px; flex-shrink: 0; background: var(--bg2);
+      border-right: 1px solid var(--border); display: flex;
+      flex-direction: column; overflow: hidden;
+    }
+
+    /* Filter section */
+    #filter-section { padding: 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .section-label {
+      font-size: 9px; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--text3); margin-bottom: 8px;
+    }
+    .filter-btn {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      padding: 6px 9px; margin-bottom: 4px; border: 1px solid var(--border);
+      border-radius: 6px; background: transparent; cursor: pointer;
+      font-family: var(--font); font-size: 11px; color: var(--text2);
+      transition: all 0.15s; text-align: left;
+    }
+    .filter-btn:hover { background: var(--bg3); border-color: var(--border2); color: var(--text); }
+    .filter-btn.active { border-color: var(--accent2); background: rgba(31,207,138,0.07); color: var(--accent); }
+    .filter-btn .fdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .filter-btn .fcount {
+      margin-left: auto; font-family: var(--mono); font-size: 10px;
+      padding: 0 6px; background: var(--bg3); border-radius: 3px;
+    }
+
+    /* Tabs */
+    #tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .tab {
+      flex: 1; padding: 8px 4px; font-size: 10px; font-weight: 500;
+      color: var(--text3); cursor: pointer; text-align: center;
+      border-bottom: 2px solid transparent; transition: all 0.15s;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .tab:hover { color: var(--text2); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Tab panes */
+    #tab-content { flex: 1; overflow-y: auto; }
+    #tab-content::-webkit-scrollbar { width: 4px; }
+    #tab-content::-webkit-scrollbar-track { background: transparent; }
+    #tab-content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    .pane { display: none; padding: 8px; }
+    .pane.active { display: block; }
+
+    /* Halte list */
+    .halte-item {
+      padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      margin-bottom: 3px; border: 1px solid transparent;
+      transition: all 0.12s;
+    }
+    .halte-item:hover { background: var(--bg3); border-color: var(--border); }
+    .halte-item.selected { background: rgba(31,207,138,0.07); border-color: var(--accent2); }
+    .halte-name { font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+    .halte-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .route-tag {
+      font-size: 9px; font-family: var(--mono); padding: 1px 5px;
+      border-radius: 3px; background: var(--bg3); border: 1px solid var(--border2);
+      color: var(--text2);
+    }
+    .halte-score {
+      margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 600;
+    }
+
+    /* Parameter pane */
+    .param-group { margin-bottom: 14px; }
+    .param-group-title {
+      font-size: 9px; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text3); margin-bottom: 8px;
+      padding-bottom: 4px; border-bottom: 1px solid var(--border);
+    }
+    .param-card {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+      padding: 9px 10px; margin-bottom: 6px;
+    }
+    .param-card-title { font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+    .param-card-desc { font-size: 10px; color: var(--text2); line-height: 1.55; }
+    .param-card-std {
+      font-size: 9px; font-family: var(--mono); color: var(--accent);
+      margin-top: 4px; opacity: 0.8;
+    }
+
+    /* Chart pane */
+    .bar-row { margin-bottom: 7px; }
+    .bar-label {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 3px;
+    }
+    .bar-name { font-size: 10px; color: var(--text2); }
+    .bar-val { font-size: 10px; font-family: var(--mono); font-weight: 500; }
+    .bar-track {
+      height: 6px; background: var(--bg3); border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    .bar-fill { height: 6px; border-radius: 3px; transition: width 0.5s ease; }
+
+    /* ── Map area ── */
+    #map-wrap { flex: 1; position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    /* Leaflet overrides */
+    .leaflet-container { background: #0f1117 !important; }
+    .leaflet-control-zoom a {
+      background: var(--bg2) !important; color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+    .leaflet-control-zoom a:hover { background: var(--bg3) !important; }
+    .leaflet-control-attribution {
+      background: rgba(15,17,23,0.85) !important; color: var(--text3) !important;
+      font-size: 9px !important;
+    }
+    .leaflet-control-attribution a { color: var(--text2) !important; }
+
+    #map-title{
+      position:absolute;
+      top:18px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:999;
+      background:rgba(255,255,255,0.96);
+      color:#111827;
+      border-radius:10px;
+      padding:12px 22px;
+      text-align:center;
+      font-size:13px;
+      font-weight:700;
+      box-shadow:0 4px 18px rgba(0,0,0,.18);
+      min-width:420px;
+      line-height:1.4;
+    }
+
+    #north-arrow{
+      position:absolute;
+      top:90px;
+      right:25px;
+      z-index:999;
+      text-align:center;
+      color:white;
+      font-size:24px;
+      font-weight:bold;
+      text-shadow:0 0 8px rgba(0,0,0,.6);
+    }
+    #north-arrow span{
+      display:block;
+      font-size:11px;
+    }
+
+    /* Legend overlay */
+    #legend {
+      position: absolute; top: 14px; right: 14px; z-index: 999;
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(0,0,0,0.12); color:#111827;
+      border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(4px);
+    }
+    .leg-title { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 7px; }
+    .leg-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; font-size: 10px; color: var(--text2); }
+    .leg-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(255,255,255,0.2); }
+
+    /* ── Halte marker animations ── */
+    @keyframes halte-pulse {
+      0%   { transform: scale(1);   opacity: 0.7; }
+      70%  { transform: scale(2.2); opacity: 0; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+    @keyframes halte-selected-pulse {
+      0%   { box-shadow: 0 0 0 0px currentColor; }
+      70%  { box-shadow: 0 0 0 10px transparent; }
+      100% { box-shadow: 0 0 0 0px transparent; }
+    }
+    .halte-marker-pulse {
+      position: absolute; inset: 0; border-radius: 50%;
+      animation: halte-pulse 2s ease-out infinite;
+    }
+    .halte-marker-wrap {
+      position: relative; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .leg-sep { border-top: 1px solid var(--border); margin: 7px 0; }
+
+    /* Projection info */
+    #proj-bar {
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 999; font-family: var(--mono); font-size: 9px; color: var(--text3);
+      background: rgba(15,17,23,0.85); padding: 3px 10px; border-radius: 20px;
+      border: 1px solid var(--border); white-space: nowrap; pointer-events: none;
+    }
+
+    /* ── Stats bar ── */
+    #statsbar {
+      display: flex; background: var(--bg2); border-top: 1px solid var(--border);
+      flex-shrink: 0; height: 52px;
+    }
+    .stat {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; border-right: 1px solid var(--border); gap: 2px;
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num { font-size: 18px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+    .stat-lbl { font-size: 9px; color: var(--text3); letter-spacing: 0.04em; }
+
+    /* ── Popup custom ── */
+    .leaflet-popup-content-wrapper {
+      background: var(--bg2) !important; border: 1px solid var(--border2) !important;
+      border-radius: 8px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+      color: var(--text) !important; padding: 0 !important;
+    }
+    .leaflet-popup-content { margin: 0 !important; width: auto !important; }
+    .leaflet-popup-tip { background: var(--bg2) !important; }
+    .leaflet-popup-close-button { color: var(--text2) !important; top: 8px !important; right: 8px !important; font-size: 16px !important; }
+    .leaflet-popup-close-button:hover { color: var(--text) !important; }
+
+    .popup-inner { padding: 14px; min-width: 260px; max-width: 300px; }
+    .popup-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+    .popup-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .popup-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .popup-score {
+      margin-left: auto; font-family: var(--mono); font-size: 13px;
+      font-weight: 600; padding: 2px 8px; border-radius: 4px;
+    }
+    .popup-routes { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+    .popup-bar-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .popup-bar-label { font-size: 9px; color: var(--text2); width: 115px; flex-shrink: 0; }
+    .popup-bar-track { flex: 1; height: 5px; background: var(--bg3); border-radius: 3px; }
+    .popup-bar-fill { height: 5px; border-radius: 3px; transition: width 0.3s; }
+    .popup-bar-val { font-family: var(--mono); font-size: 9px; font-weight: 500; width: 20px; text-align: right; flex-shrink: 0; }
+    .popup-coords {
+      font-family: var(--mono); font-size: 9px; color: var(--text3);
+      margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+    }
+    .popup-btn {
+      margin-top: 8px; width: 100%; padding: 6px;
+      background: rgba(31,207,138,0.08); border: 1px solid var(--accent2);
+      border-radius: 5px; color: var(--accent); font-family: var(--font);
+      font-size: 10px; cursor: pointer; transition: background 0.15s;
+    }
+    .popup-btn:hover { background: rgba(31,207,138,0.15); }
+  
+#map{
+  border:8px solid white;
+  box-shadow:0 0 30px rgba(0,0,0,.25);
+}
+
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Topbar -->
+  <div id="topbar">
+    <div class="logo">
+      <div class="dot"></div>
+      WebGIS Aksesibilitas Halte TransJogja — Tayogama UGM
+    </div>
+    <div class="spacer"></div>
+    <span class="badge">WGS84 · EPSG:4326</span>
+    <span class="badge green">OSM Basemap</span>
+    <div id="coord-display">Arahkan kursor ke peta untuk koordinat</div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+
+      <!-- Filter -->
+      <div id="filter-section">
+        <div class="section-label">Filter lapisan</div>
+        <button class="filter-btn active" data-f="all" onclick="setFilter('all')">
+          <span class="fdot" style="background:#888"></span>
+          Semua halte
+          <span class="fcount" id="cnt-all">10</span>
+        </button>
+        <button class="filter-btn" data-f="tinggi" onclick="setFilter('tinggi')">
+          <span class="fdot" style="background:#1fcf8a"></span>
+          Aksesibilitas tinggi ≥ 70
+          <span class="fcount" id="cnt-tinggi">0</span>
+        </button>
+        <button class="filter-btn" data-f="sedang" onclick="setFilter('sedang')">
+          <span class="fdot" style="background:#f5a623"></span>
+          Aksesibilitas sedang 40–69
+          <span class="fcount" id="cnt-sedang">0</span>
+        </button>
+        <button class="filter-btn" data-f="rendah" onclick="setFilter('rendah')">
+          <span class="fdot" style="background:#e84545"></span>
+          Perlu perbaikan &lt; 40
+          <span class="fcount" id="cnt-rendah">0</span>
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div id="tabs">
+        <div class="tab active" data-tab="list" onclick="switchTab('list')">Daftar</div>
+        <div class="tab" data-tab="param" onclick="switchTab('param')">Parameter</div>
+        <div class="tab" data-tab="chart" onclick="switchTab('chart')">Grafik</div>
+      </div>
+
+      <!-- Tab content -->
+      <div id="tab-content">
+
+        <!-- Halte list -->
+        <div class="pane active" id="pane-list">
+          <div id="halte-list"></div>
+        </div>
+
+        <!-- Parameter reference -->
+        <div class="pane" id="pane-param">
+          <div class="param-group">
+            <div class="param-group-title">Infrastruktur fisik</div>
+
+            <div class="param-card">
+              <div class="param-card-title">1. Trotoar &amp; permukaan jalan</div>
+              <div class="param-card-desc">Lebar minimum trotoar, perkerasan rata, bebas hambatan, guiding block (ubin taktil) untuk tunanetra.</div>
+              <div class="param-card-std">Std: lebar ≥ 1,5m · guiding block SNI 03-2853</div>
+            </div>
+
+            <div class="param-card">
+              <div class="param-card-title">2. Ramp &amp; akses kursi roda</div>
+              <div class="param-card-desc">Kemiringan landai, handrail bilateral, platform setinggi lantai bus untuk boarding zero-step.</div>
+              <div class="param-card-std">Std: kemiringan ≤ 8° · lebar ≥ 90cm · handrail H:90cm</div>
+            </div>
+
+            <div class="param-card">
+              <div class="param-card-title">3. Shelter &amp; naungan</div>
+              <div class="param-card-desc">Atap penutup dari hujan dan terik matahari, ruang cukup untuk pengguna kursi roda, dinding pelindung angin.</div>
+              <div class="param-card-std">Std: luas ≥ 4m² · clearance kursi roda 90×150cm</div>
+            </div>
+          </div>
+
+          <div class="param-group">
+            <div class="param-group-title">Fasilitas pendukung</div>
+
+            <div class="param-card">
+              <div class="param-card-title">4. Penerangan</div>
+              <div class="param-card-desc">Tingkat iluminasi halte pada malam hari, distribusi cahaya merata, tidak menyilaukan pengguna.</div>
+              <div class="param-card-std">Std: iluminasi ≥ 50 lux · distribusi merata SNI 6197</div>
+            </div>
+
+            <div class="param-card">
+              <div class="param-card-title">5. Tempat duduk</div>
+              <div class="param-card-desc">Bangku ergonomis dengan sandaran tangan, minimal satu slot khusus kursi roda, ketinggian sesuai standar.</div>
+              <div class="param-card-std">Std: tinggi 45–50cm · slot kursi roda ≥ 1 unit</div>
+            </div>
+
+            <div class="param-card">
+              <div class="param-card-title">6. Informasi &amp; rambu</div>
+              <div class="param-card-desc">Papan jadwal yang terbaca jelas, font cukup besar, huruf Braille, informasi trayek, pengumuman audio opsional.</div>
+              <div class="param-card-std">Std: font ≥ 16pt · kontras ≥ 4.5:1 · Braille WCAG 2.1</div>
+            </div>
+          </div>
+
+          <div class="param-group">
+            <div class="param-group-title">Faktor kontekstual</div>
+
+            <div class="param-card">
+              <div class="param-card-title">7. Jarak ke gedung terdekat</div>
+              <div class="param-card-desc">Panjang lintasan berjalan kaki dari halte ke pintu masuk gedung terdekat; mempertimbangkan kualitas jalur pejalan kaki.</div>
+              <div class="param-card-std">Std: jarak ideal ≤ 150m dengan jalur aksesibel</div>
+            </div>
+
+            <div class="param-card">
+              <div class="param-card-title">8. Keamanan &amp; keselamatan</div>
+              <div class="param-card-desc">Jarak aman dari jalur kendaraan, pagar pembatas, marka zebra cross, CCTV, dan ketersediaan petugas.</div>
+              <div class="param-card-std">Std: jarak ke jalur kendaraan ≥ 0,5m · separator fisik</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bar chart -->
+        <div class="pane" id="pane-chart">
+          <div style="padding: 4px 2px 10px; font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3);">Skor aksesibilitas per halte</div>
+          <div id="chart-bars"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="map-wrap">
+      <div id="map"></div>
+
+      <div id="north-arrow">▲<span>N</span></div>
+
+      <!-- Legend -->
+      <div id="legend">
+        <div class="leg-title">Skor aksesibilitas</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#1fcf8a; box-shadow:0 0 6px #1fcf8a88; border-color:rgba(255,255,255,0.5);"></span>Tinggi ≥ 70</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#f5a623; box-shadow:0 0 6px #f5a62388; border-color:rgba(255,255,255,0.5);"></span>Sedang 40–69</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#e84545; box-shadow:0 0 6px #e8454588; border-color:rgba(255,255,255,0.5);"></span>Rendah &lt; 40</div>
+        <div class="leg-sep"></div>
+        <div class="leg-row" style="font-size:9px; color:var(--text3)">Klik marker untuk detail</div>
+      </div>
+
+      <!-- Projection info bar -->
+      <div id="proj-bar">
+        Proyeksi: WGS84 Geographic (EPSG:4326) &nbsp;|&nbsp; Basemap: © OpenStreetMap contributors &nbsp;|&nbsp; Zoom: <span id="zoom-val">15</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div id="statsbar">
+    <div class="stat">
+      <div class="stat-num" id="st-n" style="color: var(--text)">10</div>
+      <div class="stat-lbl">Total halte</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="st-t" style="color: #1fcf8a">0</div>
+      <div class="stat-lbl">Aksesibilitas tinggi</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="st-s" style="color: #f5a623">0</div>
+      <div class="stat-lbl">Aksesibilitas sedang</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="st-r" style="color: #e84545">0</div>
+      <div class="stat-lbl">Perlu perbaikan</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="st-a" style="color: var(--text)">0</div>
+      <div class="stat-lbl">Rata-rata skor</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  /* ================================================================
+   * DATA HALTE
+   * Koordinat dalam sistem WGS84 (EPSG:4326) — desimal degree
+   * Sumber koordinat: OpenStreetMap / GPS survey kawasan UGM
+   * ================================================================ */
+  const HALTES = [
+    {
+      id: 1, name: "Halte Tayogama", lat: -7.7660, lng: 110.3758,
+      routes: ["3A","3B","5A","5B"],
+      trotoar: 72, ramp: 68, shelter: 75, cahaya: 80,
+      duduk: 73, info: 78, jarak: 82, keamanan: 70
+    },
+    {
+      id: 2, name: "Halte Kopma UGM", lat: -7.7693, lng: 110.3755,
+      routes: ["3A","1B"],
+      trotoar: 85, ramp: 70, shelter: 80, cahaya: 90,
+      duduk: 80, info: 75, jarak: 88, keamanan: 82
+    },
+    {
+      id: 3, name: "Halte MM UGM", lat: -7.7637, lng: 110.3783,
+      routes: ["3A","5A"],
+      trotoar: 78, ramp: 65, shelter: 72, cahaya: 85,
+      duduk: 75, info: 68, jarak: 80, keamanan: 76
+    },
+    {
+      id: 4, name: "Halte RS Sardjito", lat: -7.7745, lng: 110.3748,
+      routes: ["3A","3B","5B"],
+      trotoar: 88, ramp: 85, shelter: 90, cahaya: 92,
+      duduk: 85, info: 88, jarak: 90, keamanan: 88
+    },
+    {
+      id: 5, name: "Halte FK UGM", lat: -7.7720, lng: 110.3795,
+      routes: ["3B","4B","12"],
+      trotoar: 75, ramp: 78, shelter: 70, cahaya: 85,
+      duduk: 72, info: 74, jarak: 76, keamanan: 78
+    },
+    {
+      id: 6, name: "Halte Pertanian UGM", lat: -7.7618, lng: 110.3718,
+      routes: ["3B","4A"],
+      trotoar: 55, ramp: 38, shelter: 50, cahaya: 62,
+      duduk: 52, info: 45, jarak: 60, keamanan: 55
+    },
+    {
+      id: 7, name: "Halte Teknik UGM", lat: -7.7610, lng: 110.3810,
+      routes: ["4A","5A"],
+      trotoar: 52, ramp: 32, shelter: 45, cahaya: 58,
+      duduk: 48, info: 42, jarak: 55, keamanan: 50
+    },
+    {
+      id: 8, name: "Halte Fak. Biologi", lat: -7.7685, lng: 110.3835,
+      routes: ["4B","5B"],
+      trotoar: 48, ramp: 28, shelter: 42, cahaya: 55,
+      duduk: 44, info: 38, jarak: 50, keamanan: 46
+    },
+    {
+      id: 9, name: "Halte Bundaran UGM", lat: -7.7756, lng: 110.3762,
+      routes: ["1B","3A","4A"],
+      trotoar: 78, ramp: 72, shelter: 76, cahaya: 88,
+      duduk: 76, info: 80, jarak: 85, keamanan: 80
+    },
+    {
+      id: 10, name: "Halte Lembah UGM", lat: -7.7815, lng: 110.3788,
+      routes: ["4A","4B"],
+      trotoar: 42, ramp: 25, shelter: 38, cahaya: 48,
+      duduk: 36, info: 32, jarak: 44, keamanan: 40
+    },
+  ];
+
+  /* Hitung skor total (rata-rata 8 parameter) */
+  HALTES.forEach(h => {
+    const vals = [h.trotoar, h.ramp, h.shelter, h.cahaya, h.duduk, h.info, h.jarak, h.keamanan];
+    h.total   = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+    h.level   = h.total >= 70 ? 'tinggi' : h.total >= 40 ? 'sedang' : 'rendah';
+    h.color   = h.level === 'tinggi' ? '#1fcf8a' : h.level === 'sedang' ? '#f5a623' : '#e84545';
+  });
+
+  
+  /* ================================================================
+   * ROUTE DATA
+   * ================================================================ */
+  const ROUTES = {
+    "3A":[[-7.7745,110.3748],[-7.7693,110.3755],[-7.7660,110.3758],[-7.7637,110.3783]],
+    "3B":[[-7.7745,110.3748],[-7.7660,110.3758],[-7.7720,110.3795]],
+    "4A":[[-7.7618,110.3718],[-7.7610,110.3810],[-7.7756,110.3762]],
+    "4B":[[-7.7720,110.3795],[-7.7685,110.3835],[-7.7815,110.3788]],
+    "5A":[[-7.7637,110.3783],[-7.7660,110.3758],[-7.7610,110.3810]],
+    "5B":[[-7.7745,110.3748],[-7.7660,110.3758],[-7.7685,110.3835]],
+    "1B":[[-7.7693,110.3755],[-7.7756,110.3762]],
+    "12":[[-7.7720,110.3795],[-7.7756,110.3762]]
+  };
+
+  let activeRouteLayer = null;
+
+  function showRoute(routeName){
+    if(activeRouteLayer){
+      map.removeLayer(activeRouteLayer);
+    }
+
+    if(!routeName || !ROUTES[routeName]) return;
+
+    activeRouteLayer = L.polyline(ROUTES[routeName],{
+      color:'#0066ff',
+      weight:6,
+      opacity:0.9
+    }).addTo(map);
+
+    map.fitBounds(activeRouteLayer.getBounds(),{padding:[40,40]});
+  }
+
+
+/* ================================================================
+   * STATE
+   * ================================================================ */
+  let selectedId  = null;
+  let activeFilter = 'all';
+  const markerMap = {};
+
+  /* ================================================================
+   * INISIALISASI PETA LEAFLET
+   * CRS default Leaflet = EPSG:3857 (Web Mercator) untuk tile rendering
+   * Koordinat input tetap WGS84 (EPSG:4326) — Leaflet konversi otomatis
+   * ================================================================ */
+  const map = L.map('map', {
+    center: [-7.7690, 110.3770],
+    zoom: 13,
+    zoomControl: true,
+    attributionControl: true
+  });
+
+  /* Basemap OpenStreetMap */
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  L.control.scale({
+    metric:true,
+    imperial:false,
+    position:'bottomleft'
+  }).addTo(map);
+
+  
+  // =============================
+  // Buffer Radius 5 km Tayogama
+  // =============================
+  const tayogamaBuffer = L.circle([-7.7660,110.3758],{
+      radius:2000,
+      color:'#00BFFF',
+      weight:2,
+      opacity:0.9,
+      fillColor:'#00BFFF',
+      fillOpacity:0.08,
+      dashArray:'8,6'
+  }).addTo(map);
+
+
+  /* Update zoom display */
+  map.on('zoomend', () => {
+    document.getElementById('zoom-val').textContent = map.getZoom();
+  });
+
+  /* Update koordinat cursor */
+  map.on('mousemove', (e) => {
+    const { lat, lng } = e.latlng;
+    document.getElementById('coord-display').textContent =
+      `Lat: ${lat.toFixed(6)}°  |  Lng: ${lng.toFixed(6)}°  |  WGS84`;
+  });
+  map.on('mouseout', () => {
+    document.getElementById('coord-display').textContent = 'Arahkan kursor ke peta untuk koordinat';
+  });
+
+  /* ================================================================
+   * MARKER FUNCTIONS
+   * ================================================================ */
+  function makeIcon(color, selected) {
+    /* Ukuran: normal = 32px, selected = 42px */
+    const s      = selected ? 42 : 32;
+    const anchor = s / 2;
+
+    /* Glow shadow — lebih kuat saat selected */
+    const shadow = selected
+      ? `drop-shadow(0 0 8px ${color}) drop-shadow(0 0 16px ${color}88)`
+      : `drop-shadow(0 0 5px ${color}cc) drop-shadow(0 0 2px #000a)`;
+
+    /* Inner ring tebal putih + warna */
+    const borderW  = selected ? 3 : 2.5;
+    const outerRing = selected
+      ? `box-shadow: 0 0 0 3px ${color}66, 0 0 0 5px ${color}22, 0 2px 8px #0008;`
+      : `box-shadow: 0 0 0 2px ${color}44, 0 1px 6px #0007;`;
+
+    /* Ikon bus (SVG mini) di tengah marker */
+    const iconSz = Math.round(s * 0.42);
+    const busSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${iconSz}" height="${iconSz}" viewBox="0 0 24 24" fill="white" style="flex-shrink:0;opacity:0.95">
+      <path d="M4 16c0 .88.39 1.67 1 2.22V20a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1.78A2.99 2.99 0 0 0 20 16V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm9 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM6 6h12v5H6V6z"/>
+    </svg>`;
+
+    /* Pulse ring hanya untuk normal (bukan selected) */
+    const pulseDiv = !selected
+      ? `<div class="halte-marker-pulse" style="background:${color};"></div>`
+      : '';
+
+    /* Selected: tambahkan "halo" berdenyut melalui outline animated */
+    const selectedRing = selected
+      ? `<div style="
+            position:absolute; inset:-6px; border-radius:50%;
+            border:2px solid ${color}; opacity:0.6;
+            animation: halte-pulse 1.5s ease-out infinite;
+         "></div>
+         <div style="
+            position:absolute; inset:-12px; border-radius:50%;
+            border:1.5px solid ${color}; opacity:0.3;
+            animation: halte-pulse 1.5s ease-out 0.3s infinite;
+         "></div>`
+      : '';
+
+    return L.divIcon({
+      className: '',
+      iconSize:   [s, s],
+      iconAnchor: [anchor, anchor],
+      html: `
+        <div class="halte-marker-wrap" style="
+          width:${s}px; height:${s}px;
+          background: radial-gradient(circle at 38% 36%, ${color}ff, ${color}bb);
+          border: ${borderW}px solid rgba(255,255,255,0.9);
+          ${outerRing}
+          filter: ${shadow};
+        ">
+          ${pulseDiv}
+          ${selectedRing}
+          ${busSvg}
+        </div>`
+    });
+  }
+
+  function scoreColor(v) {
+    return v >= 70 ? '#1fcf8a' : v >= 40 ? '#f5a623' : '#e84545';
+  }
+
+  /* Buat semua marker */
+  HALTES.forEach(h => {
+    const m = L.marker([h.lat, h.lng], { icon: makeIcon(h.color, false) }).addTo(map);
+    m.on('click', () => selectHalte(h.id));
+    markerMap[h.id] = m;
+  });
+
+  /* ================================================================
+   * POPUP
+   * ================================================================ */
+  const PARAMS = [
+    { key: 'trotoar',  label: 'Trotoar & permukaan' },
+    { key: 'ramp',     label: 'Ramp / kursi roda'   },
+    { key: 'shelter',  label: 'Shelter & naungan'   },
+    { key: 'cahaya',   label: 'Penerangan'          },
+    { key: 'duduk',    label: 'Tempat duduk'        },
+    { key: 'info',     label: 'Informasi & rambu'   },
+    { key: 'jarak',    label: 'Jarak ke gedung'     },
+    { key: 'keamanan', label: 'Keamanan'            },
+  ];
+
+  function buildPopup(h) {
+    const bars = PARAMS.map(p => `
+      <div class="popup-bar-row">
+        <div class="popup-bar-label">${p.label}</div>
+        <div class="popup-bar-track">
+          <div class="popup-bar-fill" style="width:${h[p.key]}%;background:${scoreColor(h[p.key])}"></div>
+        </div>
+        <div class="popup-bar-val" style="color:${scoreColor(h[p.key])}">${h[p.key]}</div>
+      </div>`).join('');
+
+    const routes = h.routes.map(r =>
+      `<span class="route-tag">${r}</span>`).join('');
+
+    const routeOptions = h.routes.map(r =>
+      `<option value="${r}">Rute ${r}</option>`).join('');
+
+    return `<div class="popup-inner">
+      <div class="popup-header">
+        <div class="popup-dot" style="background:${h.color}"></div>
+        <div class="popup-title">${h.name}</div>
+        <div class="popup-score" style="color:${h.color};background:${h.color}18">${h.total}/100</div>
+      </div>
+      <div class="popup-routes">${routes}</div>
+
+      <div style="margin-bottom:10px">
+        <select onchange="showRoute(this.value)" style="width:100%;padding:6px;border-radius:6px">
+          <option value="">Pilih Rute</option>
+          ${routeOptions}
+        </select>
+      </div>
+      ${bars}
+      <div class="popup-coords">
+        Lat: ${h.lat.toFixed(6)}° &nbsp;|&nbsp; Lng: ${h.lng.toFixed(6)}° &nbsp;|&nbsp; WGS84 (EPSG:4326)
+      </div>
+    </div>`;
+  }
+
+  /* ================================================================
+   * SELECT HALTE
+   * ================================================================ */
+  function selectHalte(id) {
+    selectedId = selectedId === id ? null : id;
+
+    /* Update marker icons */
+    HALTES.forEach(h => {
+      markerMap[h.id].setIcon(makeIcon(h.color, h.id === selectedId));
+    });
+
+    renderList();
+
+    if (selectedId) {
+      const h = HALTES.find(x => x.id === selectedId);
+      map.panTo([h.lat, h.lng], { animate: true, duration: 0.5 });
+      L.popup({ maxWidth: 320, closeButton: true })
+        .setLatLng([h.lat, h.lng])
+        .setContent(buildPopup(h))
+        .openOn(map);
+    } else {
+      map.closePopup();
+    }
+  }
+
+  map.on('popupclose', () => {
+    if (selectedId) {
+      selectedId = null;
+      HALTES.forEach(h => markerMap[h.id].setIcon(makeIcon(h.color, false)));
+      renderList();
+    }
+  });
+
+  /* ================================================================
+   * FILTER
+   * ================================================================ */
+  function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.f === f);
+    });
+    HALTES.forEach(h => {
+      const visible = f === 'all' || h.level === f;
+      markerMap[h.id].setOpacity(visible ? 1 : 0.12);
+      markerMap[h.id].setIcon(makeIcon(visible ? h.color : '#555', false));
+    });
+    selectedId = null;
+    map.closePopup();
+    renderList();
+    renderStats();
+    renderChart();
+  }
+
+  /* ================================================================
+   * RENDER SIDEBAR: LIST
+   * ================================================================ */
+  function renderList() {
+    const vis = HALTES.filter(h => activeFilter === 'all' || h.level === activeFilter);
+    document.getElementById('halte-list').innerHTML = vis.map(h => `
+      <div class="halte-item${selectedId === h.id ? ' selected' : ''}" onclick="selectHalte(${h.id})">
+        <div class="halte-name">${h.name}</div>
+        <div class="halte-meta">
+          ${h.routes.map(r => `<span class="route-tag">${r}</span>`).join('')}
+          <span class="halte-score" style="color:${h.color}">${h.total}</span>
+        </div>
+      </div>`).join('');
+  }
+
+  /* ================================================================
+   * RENDER SIDEBAR: STATS
+   * ================================================================ */
+  function renderStats() {
+    const vis = HALTES.filter(h => activeFilter === 'all' || h.level === activeFilter);
+    document.getElementById('st-n').textContent = vis.length;
+    document.getElementById('st-t').textContent = vis.filter(h => h.level === 'tinggi').length;
+    document.getElementById('st-s').textContent = vis.filter(h => h.level === 'sedang').length;
+    document.getElementById('st-r').textContent = vis.filter(h => h.level === 'rendah').length;
+    document.getElementById('st-a').textContent = vis.length
+      ? Math.round(vis.reduce((s, h) => s + h.total, 0) / vis.length) : 0;
+
+    /* Update filter counts */
+    document.getElementById('cnt-all').textContent    = HALTES.length;
+    document.getElementById('cnt-tinggi').textContent = HALTES.filter(h => h.level === 'tinggi').length;
+    document.getElementById('cnt-sedang').textContent = HALTES.filter(h => h.level === 'sedang').length;
+    document.getElementById('cnt-rendah').textContent = HALTES.filter(h => h.level === 'rendah').length;
+  }
+
+  /* ================================================================
+   * RENDER SIDEBAR: CHART
+   * ================================================================ */
+  function renderChart() {
+    const vis = HALTES
+      .filter(h => activeFilter === 'all' || h.level === activeFilter)
+      .sort((a, b) => b.total - a.total);
+
+    document.getElementById('chart-bars').innerHTML = vis.map(h => `
+      <div class="bar-row">
+        <div class="bar-label">
+          <span class="bar-name">${h.name.replace('Halte ', '')}</span>
+          <span class="bar-val" style="color:${h.color}">${h.total}</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${h.total}%;background:${h.color}"></div>
+        </div>
+      </div>`).join('');
+  }
+
+  /* ================================================================
+   * TAB SWITCHING
+   * ================================================================ */
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + tab));
+    if (tab === 'chart') renderChart();
+  }
+
+  /* ================================================================
+   * INIT
+   * ================================================================ */
+  renderList();
+  renderStats();
+  renderChart();
+</script>
+</body>
+</html>
